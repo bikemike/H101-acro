@@ -71,12 +71,6 @@ float angleerror[3];
 
 float overthrottlefilt;
 
-#ifdef STOCK_TX_AUTOCENTER
-float autocenter[3];
-float lastrx[3];
-unsigned int consecutive[3];
-#endif
-
 extern int pwmdir;
 
 void bridge_sequencer(int dir);
@@ -356,22 +350,6 @@ limitf(&throttle, 1.0);
 		  throttlehpf(0);
 #endif
 
-#ifdef STOCK_TX_AUTOCENTER
-      for( int i = 0 ; i <3;i++)
-				{
-					if ( rx[i] == lastrx[i] )
-						{
-						  consecutive[i]++;
-							
-						}
-					else consecutive[i] = 0;
-					lastrx[i] = rx[i];
-					if ( consecutive[i] > 1000 && fabsf( rx[i]) < 0.1f )
-						{
-							autocenter[i] = rx[i];
-						}
-				}
-#endif				
 // end motors off / failsafe / onground
 	  }
 	else

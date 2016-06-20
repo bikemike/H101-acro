@@ -130,12 +130,125 @@ static char checkpacket()
 	return 0;
 }
 
+#define CHAN_MAX      1022
 
-#define CHANOFFSET 512
+#if defined (CHAN_DEADBAND) || defined (THROTTLE_MID)
 
-float packettodata(int *data)
+typedef struct
 {
-	return (((data[0] & 0x0003) * 256 + data[1]) - CHANOFFSET) * 0.001953125;
+	uint16_t chan_min;
+	uint16_t chan_max;
+	uint16_t mid_low;
+	uint16_t mid_high;
+	float    mult_low;
+	float    mult_high;
+} t_chan_adjust;
+
+t_chan_adjust chan_adjust[4] = {
+	//  chanmin,  chanmax, midl, midh, mult_low, mult_hi
+#ifdef CHAN_DEADBAND
+	{       0, CHAN_MAX,  CHAN_MAX*.5-CHAN_DEADBAND*.5, CHAN_MAX*.5+CHAN_DEADBAND*.5,      0.f,     0.f }, // roll
+	{       0, CHAN_MAX,  CHAN_MAX*.5-CHAN_DEADBAND*.5, CHAN_MAX*.5+CHAN_DEADBAND*.5,      0.f,     0.f }, // pitch
+	{       0, CHAN_MAX,  CHAN_MAX*.5-CHAN_DEADBAND*.5, CHAN_MAX*.5+CHAN_DEADBAND*.5,      0.f,     0.f }, // yaw
+#else
+	{0},{0},{0},
+#endif
+	{       0, CHAN_MAX,                   CHAN_MAX*.5,                  CHAN_MAX*.5,      0.f,     0.f},  // throttle
+};
+#endif
+
+
+float packettodata(int stick, int *data)
+{
+	// stick 0 = roll, 1 = pitch, 2 = yaw, 3 = throttle
+	uint16_t chan_value = (data[0] & 0x0003) * 256 + data[1];
+	float percent = 0.f;
+#ifndef CHAN_DEADBAND
+	percent = (chan_value - CHAN_MAX*.5f) * 0.001956947;
+#else
+	if (0.f == chan_adjust[stick].mult_low)
+	{
+		// initialize midstick position on initial packet after bind
+		if (0 == chan_adjust[stick].mid_low)
+			chan_adjust[stick].mid_low  = chan_value;
+		if (0 == chan_adjust[stick].mid_high)
+			chan_adjust[stick].mid_high  = chan_value;
+
+		chan_adjust[stick].mult_low   = 1.f/(chan_adjust[stick].mid_low - chan_adjust[stick].chan_min);
+		chan_adjust[stick].mult_high  = 1.f/(chan_adjust[stick].chan_max - chan_adjust[stick].mid_high);
+	}
+
+	if (chan_value >= chan_adjust[stick].mid_high)
+	{
+		percent = (float)chan_value - chan_adjust[stick].mid_high;
+		percent = percent * chan_adjust[stick].mult_high;
+	}
+	else if (chan_value <= chan_adjust[stick].mid_low)
+	{
+		percent = (float)chan_value - chan_adjust[stick].mid_low;
+		percent = percent * chan_adjust[stick].mult_low;
+	}
+#endif
+
+#ifndef DISABLE_EXPO
+	if (0 == stick || 1 == stick)
+		percent = rcexpo(percent, EXPO_XY);
+	else if (2 == stick)
+		percent = rcexpo(percent, EXPO_YAW);
+	else if (3 == stick)
+		percent = (rcexpo(percent*2-1, EXPO_THROTTLE ) + 1.f) * .5f;
+#endif
+	return percent;
+}
+
+float packettodata_throttle(int stick, int *data)
+{
+	// stick 0 = roll, 1 = pitch, 2 = yaw, 3 = throttle
+	uint16_t chan_value = (data[0] & 0x0003) * 256 + data[1];
+	float percent = 0.f;
+
+#ifndef DISABLE_EXPO
+#ifndef THROTTLE_MID
+	uint16_t chan_min = 0;
+	uint16_t chan_max = CHAN_MAX;
+#else
+	uint16_t chan_min = chan_adjust[stick].chan_min;
+	uint16_t chan_max = chan_adjust[stick].chan_max;
+#endif
+	float chan_percent = (chan_value - chan_min)/(float)(chan_max - chan_min) ;
+	chan_percent       = (rcexpo(chan_percent*2-1, EXPO_THROTTLE ) + 1.f) * .5f;
+	chan_value         = chan_percent*(chan_max - chan_min) + chan_min;
+#endif
+
+#ifndef THROTTLE_MID
+	percent = chan_value * 0.000978474;
+#else
+	if (0.f == chan_adjust[stick].mult_low)
+	{
+		// initialize multiplier
+		chan_adjust[stick].mult_low = ((chan_adjust[stick].mid_low - chan_adjust[stick].chan_min)/(float)(chan_adjust[stick].chan_max - chan_adjust[stick].chan_min))/((chan_adjust[stick].chan_max + chan_adjust[stick].chan_min)/2.f-chan_adjust[stick].chan_min);
+		chan_adjust[stick].mult_high  = (1.f - (chan_adjust[stick].mid_high - chan_adjust[stick].chan_min)/(float)(chan_adjust[stick].chan_max - chan_adjust[stick].chan_min)) / (chan_adjust[stick].chan_max - (chan_adjust[stick].chan_max + chan_adjust[stick].chan_min)/2.f);
+	}
+
+	if (chan_value > chan_adjust[stick].chan_max)
+	{
+		percent = 1.f;
+	}
+	else if (chan_value >= (chan_adjust[stick].chan_max+chan_adjust[stick].chan_min)*.5f)
+	{
+		percent = chan_value * chan_adjust[stick].mult_high + (1.f - chan_adjust[stick].mult_high*chan_adjust[stick].chan_max);
+	}
+	else if (chan_value >= chan_adjust[stick].chan_min)
+	{
+		percent = chan_value * chan_adjust[stick].mult_low + (0.f - chan_adjust[stick].mult_low*chan_adjust[stick].chan_min);
+	}
+	else
+	{
+		percent = 0.f;
+	}
+#endif
+
+	return percent;
 }
 
 
@@ -151,17 +264,12 @@ static int decodepacket(void)
 		    }
 		  if ((sum & 0xFF) == rxdata[14])
 		    {
-			    rx[0] = packettodata(&rxdata[4]);
-			    rx[1] = packettodata(&rxdata[6]);
-			    rx[2] = packettodata(&rxdata[10]);
+			    rx[0] = packettodata(0,&rxdata[4]);
+			    rx[1] = packettodata(1,&rxdata[6]);
+			    rx[2] = packettodata(2,&rxdata[10]);
 			    // throttle             
-			    rx[3] = ((rxdata[8] & 0x0003) * 256 + rxdata[9]) * 0.000976562;
+			    rx[3] = packettodata_throttle(3,&rxdata[8]);
 
-#ifndef DISABLE_EXPO
-			    rx[0] = rcexpo(rx[0], EXPO_XY);
-			    rx[1] = rcexpo(rx[1], EXPO_XY);
-			    rx[2] = rcexpo(rx[2], EXPO_YAW);
-#endif
 
 
 			    // trims are 50% of controls at max

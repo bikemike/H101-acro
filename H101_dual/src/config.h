@@ -70,6 +70,7 @@
 // positive = less sensitive near center 
 #define EXPO_XY 0.3f
 #define EXPO_YAW 0.0f
+#define EXPO_THROTTLE 0.8f
 
 
 
@@ -145,8 +146,15 @@
 // remember if using trims as switches => devo/tx module incompatible
 //#define USE_STOCK_TX
 
-// automatically remove center bias ( needs throttle off for 1 second )
-//#define STOCK_TX_AUTOCENTER
+// throttle needed to maintain a hover (value between 0 and 1022)
+// use with EXPO_THROTTLE to make hovering much easer (especially useful for indoor flight)
+//#define THROTTLE_MID  511
+
+
+// chan deadband. recommended to enable for stock tx
+// if you need more control over the deadband for each channel of your
+// tx, you can do so by editing rx_bayang_protocol.c
+//#define CHAN_DEADBAND 200
 
 
 // throttle angle compensation in level mode
