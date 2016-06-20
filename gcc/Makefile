@@ -40,7 +40,8 @@ SRC = 	$(wildcard $(topdir)/H101_dual/src/*.c) \
 	$(topdir)/Peripherals/src/gd32f1x0_usart.c
 
 OBJDIR = .
-OBJ = $(SRC:%.c=$(OBJDIR)/%.o)
+OBJ_TMP = $(SRC:%.c=$(OBJDIR)/%.o)
+OBJ = $(OBJ_TMP:%.cpp=$(OBJDIR)/%.o)
 OBJ += Startup.o
 
 all: $(TARGET)
