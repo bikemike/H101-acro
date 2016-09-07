@@ -165,6 +165,10 @@
 // enable auto lower throttle near max throttle to keep control
 // comment out to disable
 //#define MIX_LOWER_THROTTLE
+#define MIX_INCREASE_THROTTLE
+
+// lowers the rates when motor limits exceeded
+//#define RATELIMITER_ENABLE
 
 // options for mix throttle lowering if enabled
 // 0 - 100 range ( 100 = full reduction / 0 = no reduction )
@@ -235,6 +239,7 @@
 // uncomment to enable buzzer
 //#define BUZZER_ENABLE
 
+//#define BUZZER_PIN       GPIO_PIN_13 // SWDAT
 #define BUZZER_PIN       GPIO_PIN_14 // SWCLK
 #define BUZZER_PIN_PORT  GPIOA
 #define BUZZER_DELAY     5000000 // 5 seconds after loss of tx or low bat before buzzer starts
@@ -270,6 +275,16 @@
 
 // throttle direct to motors for thrust measure/ esc testing
 //#define MOTORS_TO_THROTTLE
+
+// level mode "manual" trims ( in degrees)
+// pitch positive forward trim
+// roll positive right trim
+#define TRIM_PITCH 0.0
+#define TRIM_ROLL 0.0
+
+// inverted trims
+#define TRIM_PITCH_INV 0.0
+#define TRIM_ROLL_INV 0.0
 
 
 // time to change motor direction (uS)

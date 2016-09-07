@@ -31,13 +31,13 @@ THE SOFTWARE.
 
 #include "gd32f1x0.h"
 
+#include "config.h"
 #include "led.h"
 #include "util.h"
 #include "sixaxis.h"
 #include "drv_adc.h"
 #include "drv_time.h"
 #include "drv_softi2c.h"
-#include "config.h"
 #include "drv_pwm.h"
 #include "drv_adc.h"
 #include "drv_gpio.h"
@@ -313,14 +313,19 @@ vbatt = battadc;
 			if (rxmode == RX_MODE_BIND)
 				buzzer_delay = 20000000;
 
-			if (!buzzer_init && maintime > buzzer_delay) 
+			if (maintime > buzzer_delay)
 			{
-				if (gpio_init_buzzer())
-					buzzer_init = 1;
+				if (lowbatt || failsafe || buzzer_init)
+				{
+					if (!buzzer_init)
+					{
+						buzzer_init = gpio_init_buzzer();
 			}
-			else if (buzzer_init && maintime > buzzer_delay)
+					else
 			{
 				buzzer();
+			}
+				}
 			}
 #endif
 
@@ -328,7 +333,7 @@ vbatt = battadc;
 		  elapsedtime = gettime() - maintime;
 #endif
 // loop time 1ms                
-		  while ((gettime() - maintime) < 1000)
+		  while ((gettime() - maintime) < (1000 - 22) )
 			  checkrx();
 
 
