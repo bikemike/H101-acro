@@ -229,9 +229,15 @@ int main(void)
 			    // endless loop
 		    }
 
-		  sixaxis_read();
+		checkrx();
 
-		  control();
+		sixaxis_read(checkrx);
+
+		checkrx();
+
+		control();
+
+		checkrx();
 
 // battery low logic
 				
@@ -318,13 +324,12 @@ vbatt = battadc;
 			}
 #endif
 
-		  checkrx();
 #ifdef DEBUG
 		  elapsedtime = gettime() - maintime;
 #endif
 // loop time 1ms                
 		  while ((gettime() - maintime) < 1000)
-			  delay(10);
+			  checkrx();
 
 
 

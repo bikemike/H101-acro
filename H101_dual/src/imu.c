@@ -78,7 +78,7 @@ void imu_init(void)
 	// init the gravity vector with accel values
 	for (int y = 0; y < 100; y++)
 	  {
-		  sixaxis_read();
+		  sixaxis_read(NULL);
 
 		  for (int x = 0; x < 3; x++)
 		    {

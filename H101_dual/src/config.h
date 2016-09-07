@@ -243,7 +243,8 @@
 //#define BLUETOOTH_ENABLE
 //#define USE_IBEACON
 
-
+// enable telemetry
+//#define TELEMETRY_ENABLE
 
 
 

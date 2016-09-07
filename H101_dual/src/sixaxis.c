@@ -84,7 +84,7 @@ float gyrocal[3];
 
 float lpffilter(float in, int num);
 
-void sixaxis_read(void)
+void sixaxis_read(idle_callback idle_cb)
 {
 	int data[16];
 
@@ -92,11 +92,11 @@ void sixaxis_read(void)
 
 	float gyronew[3];
 
-	error = (i2c_readdata(59, data, 14));
+	error = i2c_readdata(59, data, 14, idle_cb);
 // 2nd attempt at an i2c read   
 	if (error)
 	  {
-		  error = (i2c_readdata(59, data, 14));
+		  error = i2c_readdata(59, data, 14,idle_cb);
 		  // set a warning flag 
 		  // not implemented
 		  // warningflag = 1;
@@ -172,7 +172,7 @@ void gyro_cal(void)
 		  if (looptime == 0)
 			  looptime = 1;
 
-		  i2c_readdata(67, data, 6);
+		  i2c_readdata(67, data, 6, NULL);
 
 		  gyro[1] = (int16_t) ((data[0] << 8) + data[1]);
 		  gyro[0] = (int16_t) ((data[2] << 8) + data[3]);
@@ -268,7 +268,7 @@ void acc_cal(void)
 	accelcal[2] = 2048;
 	for (int y = 0; y < 500; y++)
 	  {
-		  sixaxis_read();
+		  sixaxis_read(NULL);
 		  for (int x = 0; x < 3; x++)
 		    {
 			    lpf(&accelcal[x], accel[x], 0.92);

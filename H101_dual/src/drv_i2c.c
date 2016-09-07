@@ -224,7 +224,8 @@ int i2c_readreg(int reg)
 }
 
 
-int i2c_readdata(int reg, int *data, int size)
+
+int i2c_readdata(int reg, int *data, int size, idle_callback idle_cb)
 {
 	int index = 0;
 	int error = 0;
@@ -261,6 +262,8 @@ int i2c_readdata(int reg, int *data, int size)
 		  while (!I2C_StateDetect(I2C1, I2C_PROGRAMMINGMODE_MASTER_BYTE_RECEIVED) && (i2ccount2 < 2048))
 		    {
 			    i2ccount2++;
+					if (NULL != idle_cb)
+						idle_cb();
 		    }
 		  if (i2ccount2 >= 2048)
 			  byteerror = 1;

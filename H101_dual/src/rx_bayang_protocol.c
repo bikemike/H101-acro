@@ -47,6 +47,15 @@ THE SOFTWARE.
 
 #include "util.h"
 
+#define _BV( bit )   (1 << (bit))
+
+#ifdef TELEMETRY_ENABLE
+uint8_t send_telemetry = 0;
+uint8_t flightmode     = 0;
+uint8_t datamode       = 0;
+uint8_t dataselect     = 1;
+uint8_t dataadjust     = 1;
+#endif
 
 // ble settings
 #ifdef BLUETOOTH_ENABLE
@@ -67,7 +76,8 @@ THE SOFTWARE.
 // radio settings
 
 // packet period in uS
-#define PACKET_PERIOD 3000
+uint32_t packet_period = 0;
+uint32_t packet_count  = 0; // used to calculate the packet_period
 
 // was 250 ( uS )
 #define PACKET_OFFSET 250
@@ -146,7 +156,14 @@ writeregs( demodcal , sizeof(demodcal) );
 
 #define XN_TO_RX B00001111
 #define XN_TO_TX B00000010
+#ifdef TELEMETRY_ENABLE
+// more telemetry packets seem to be received by the
+// transmitter when tx power is not set high (short range)
+// still need to test this on longer range
+#define XN_POWER B00000010
+#else
 #define XN_POWER B00000111
+#endif
 #endif
 
 
@@ -159,7 +176,7 @@ delay(100);
 
 int rxaddress[5] = { 0 , 0 , 0 , 0 , 0  };
 xn_writerxaddress( rxaddress);
-
+xn_writetxaddress( rxaddress);
 	xn_writereg( EN_AA , 0 );	// aa disabled
 	xn_writereg( EN_RXADDR , 1 ); // pipe 0 only
 	xn_writereg( RF_SETUP , XN_POWER);  // lna high current on ( better performance )
@@ -186,6 +203,8 @@ spi_csoff();
 
   xn_writereg( 0 , XN_TO_RX ); // power up, crc enabled, rx mode
 
+					xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
+					xn_command( FLUSH_RX);
 
 #ifdef RADIO_CHECK
 void check_radio(void);
@@ -354,8 +373,8 @@ btLeWhiten(packet, len, whitenstart[chan]);
 
 #define RXDEBUG
 
-#ifdef RXDEBUG
 unsigned long packettime;
+#ifdef RXDEBUG
 int channelcount[4];
 int failcount;
 int packetrx;
@@ -447,9 +466,9 @@ int oldchan = 0;
 
 #define BLE_TX_TIMEOUT 10000
 
-void beacon_sequence()
+int beacon_sequence()
 {
-static int beacon_seq_state = 0;
+ static int beacon_seq_state = 0;
 	
  switch ( beacon_seq_state )
  {
@@ -506,6 +525,7 @@ static int beacon_seq_state = 0;
 	 
  }
 
+ return beacon_seq_state;
 }
 
 int interleave = 0;
@@ -654,19 +674,11 @@ return;
 
 static char checkpacket()
 {
-	int status = xn_readreg( 7 );
+	uint8_t status = xn_command(NOP);
 
-	if ( status&(1<<MASK_RX_DR) )
-	{	 // rx clear bit
-		// this is not working well
-	 // xn_writereg( STATUS , (1<<MASK_RX_DR) );
-		//RX packet received
-		//return 1;
-	}
-	if( (status & B00001110) != B00001110 )
+	if (status & _BV(MASK_RX_DR))
 	{
-		// rx fifo not empty		
-		return 2;	
+		return 1;
 	}
 	
   return 0;
@@ -681,6 +693,13 @@ float packettodata( int *  data)
 	return ( ( ( data[0]&0x0003) * 256 + data[1] ) - 512 ) * 0.001953125 ;	
 }
 
+#ifdef TELEMETRY_ENABLE
+extern float pidkp[PIDNUMBER];
+extern float pidki[PIDNUMBER];
+extern float pidkd[PIDNUMBER];
+extern float apidkp[3];
+extern float apidki[3];
+#endif
 
 static int decodepacket( void)
 {
@@ -744,7 +763,103 @@ char trims[4];
 			    aux[CH_HEADFREE] = (rxdata[2] & 0x02) ? 1 : 0;
 
 			    aux[CH_RTH] = (rxdata[2] & 0x01) ? 1 : 0;	// rth channel
+#ifdef TELEMETRY_ENABLE
+					send_telemetry = (rxdata[2] & 0x04) ? 1: 0; // custom telemetry enable flag
 
+					flightmode = (rxdata[3]) & 0x3;
+					static uint8_t new_dataselect = 0;
+					new_dataselect = (rxdata[3]>>2) & 0x7;
+					static uint8_t new_dataadjust = 0;
+					new_dataadjust =(rxdata[3]>>5) & 0x3;
+
+
+					// data mode  = 0, 1, 2
+					uint8_t num_data_modes = 3;
+					if (dataselect != new_dataselect)
+					{
+						dataselect = new_dataselect;
+						if (dataselect == 0)
+						{
+							datamode = (datamode + (num_data_modes-1))%num_data_modes;
+						}
+						else if (dataselect == 4)
+						{
+							datamode = (datamode + 1)%num_data_modes;
+						}
+					}
+
+					if (dataadjust != new_dataadjust)
+					{
+						dataadjust = new_dataadjust;
+						if (dataselect != 0 && dataselect != 4)
+						{
+							dataadjust = new_dataadjust;
+
+							float multiplier = 1.f;
+
+							if (0 == dataadjust)
+							{
+								multiplier = 1/1.1f;
+							}
+							else if (2 == dataadjust)
+							{
+								multiplier = 1.1f;
+							}
+
+
+							// data mode (0=acro roll/acro pitch, 1=acro yaw, 2=level roll/pitch, )
+							if (0 == datamode)
+							{
+								if (1 == dataselect)
+								{
+									pidkp[0] *= multiplier;
+									pidkp[1] *= multiplier;
+								}
+								else if (2 == dataselect)
+								{
+									pidki[0] *= multiplier;
+									pidki[1] *= multiplier;
+								}
+								else if (3 == dataselect)
+								{
+									pidkd[0] *= multiplier;
+									pidkd[1] *= multiplier;
+								}
+							}
+							else if (1 == datamode)
+							{
+								if (1 == dataselect)
+								{
+									pidkp[2] *= multiplier;
+								}
+								else if (2 == dataselect)
+								{
+									pidki[2] *= multiplier;
+								}
+								else if (3 == dataselect)
+								{
+									pidkd[2] *= multiplier;
+								}
+							}
+							else if (2 == datamode)
+							{
+								if (1 == dataselect)
+								{
+									pidkp[0] *= multiplier;
+									pidkp[1] *= multiplier;
+								}
+								else if (2 == dataselect)
+								{
+									pidki[0] *= multiplier;
+									pidki[1] *= multiplier;
+								}
+								else if (3 == dataselect)
+								{
+								}
+							}
+						}
+					}
+#endif
 
 
 			for ( int i = 0 ; i < AUXNUMBER - 2 ; i++)
@@ -768,6 +883,9 @@ void nextchannel()
 	rf_chan++;
 	rf_chan%=4;
 	xn_writereg(0x25, rfchannel[rf_chan]);
+	xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
+	xn_command( FLUSH_RX);
+	xn_command( FLUSH_TX);
 }
 
 
@@ -783,10 +901,169 @@ unsigned int skipchannel = 0;
 int lastrxchan;
 int timingfail = 0;
 
+#ifdef TELEMETRY_ENABLE
 
+
+int radio_mode_tx = 0;
+uint32_t telemetry_packets_sent = 0;
+void radio_set_tx()
+{
+	xn_writereg(CONFIG, _BV(PWR_UP)|_BV(EN_CRC)|_BV(CRCO));
+	xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
+	xn_command(FLUSH_TX);
+	xn_command(FLUSH_RX);
+	radio_mode_tx = 1;
+}
+
+void radio_set_rx()
+{
+	xn_writereg(CONFIG, _BV(PWR_UP)|_BV(PRIM_RX)|_BV(EN_CRC)|_BV(CRCO));
+	xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
+	xn_command(FLUSH_RX);
+	xn_command(FLUSH_TX);
+	radio_mode_tx = 0;
+}
+
+extern float vbattfilt;
+
+typedef union {
+	uint16_t v;
+	uint8_t  bytes[2];
+} val;
+uint32_t txtime = 0;
+uint32_t txtime_elapse = 0;
+
+
+// voltage, up time, flight time, flight mode, pid, accelerometer
+void send_telemetry_packet()
+{
+	val v;
+	uint32_t uptime = gettime();
+	uint8_t throttle_on = 0;
+	static uint32_t flighttime = 0;
+	static uint32_t throttle_on_time = 0;
+
+	if (!throttle_on && rx[3] > 0.f)
+	{
+		throttle_on = 1;
+		throttle_on_time = uptime;
+	}
+	else if (throttle_on)
+	{
+		if (rx[3] == 0.f)
+		{
+			throttle_on = 0;
+		}
+		flighttime += uptime - throttle_on_time;
+		throttle_on_time = uptime;
+	}
+
+	v.v = (uint16_t)(vbattfilt*100);
+
+	rxdata[0] = 0xa9;       // packet id
+	rxdata[1] = v.bytes[0]; // battery voltage
+	rxdata[2] = v.bytes[1]; // battery voltage
+	v.v = (uint16_t)(uptime / 1000000);
+	rxdata[3] = v.bytes[0];
+	rxdata[4] = v.bytes[1];
+	v.v = (uint16_t)(flighttime / 1000000);
+	rxdata[5] = v.bytes[0];
+	rxdata[6] = v.bytes[1];
+
+	// flight mode (bit 0-1),
+	// data mode   (bit 2-5)
+	// data select (bit 6-7)
+	rxdata[7] = aux[LEVELMODE] ? 0 : 1; // flight mode (0 = level, 1 = acro, 2 = ?)
+	// data mode (0=acro roll/acro pitch, 1=acro yaw, 2=level roll/pitch, )
+	// not implemented: 3=rate xy, rate yaw, 4=level rate, max angle
+	rxdata[7] |= (datamode&0xF) << 2;
+	rxdata[7] |= ((dataselect-1)&0x3) << 6;
+
+
+	float* d[3] = {0};
+
+	if (datamode == 0)
+	{
+		d[0] = &pidkp[0];
+		d[1] = &pidki[0];
+		d[2] = &pidkd[0];
+	}
+	else if (datamode == 1)
+	{
+		d[0] = &pidkp[2];
+		d[1] = &pidki[2];
+		d[2] = &pidkd[2];
+	}
+	else if (datamode == 2)
+	{
+		d[0] = &apidkp[0];
+		d[1] = &apidki[0];
+		d[2] = NULL;
+	}
+
+
+	for (uint8_t i = 0; i < 3; ++i)
+	{
+		if (NULL != d[i])
+		{
+			v.v = (uint16_t)((*d[i])*1000);
+			rxdata[8+i*2] = v.bytes[0]; // p
+			rxdata[9+i*2] = v.bytes[1];
+		}
+		else
+		{
+			rxdata[8+i*2] = 0;
+			rxdata[9+i*2] = 0;
+		}
+	}
+
+
+	int sum = 0;
+	for(int i=0; i<14; i++)
+	{
+		sum += rxdata[i];
+	}
+	rxdata[14] = sum&0xFF;
+
+	radio_set_tx();
+	xn_writepayload(  rxdata , 15 );
+	txtime = gettime();
+}
+
+#endif
+uint32_t rx_bind_count   = 0;
+uint32_t rx_packet_rate  = UINT32_MAX;
+uint32_t rx_time_last  = 0;
+
+uint8_t seq = 0;
+uint32_t seq_errors = 0;
+
+uint32_t chans_to_skip = 0;
+uint32_t skipped_chans = 0;
 
 void checkrx(void)
 {
+#ifdef TELEMETRY_ENABLE
+	if (radio_mode_tx)
+	{
+		int status;
+		status = xn_command(NOP);
+
+		if (status & _BV(MASK_TX_DS))
+		{
+			txtime_elapse = gettime() - txtime;
+			++telemetry_packets_sent;
+		}
+		else
+		{
+			return;
+		}
+
+		radio_set_rx();
+		nextchannel();
+	}
+#endif
+
 	int packetreceived = checkpacket();
 	int pass = 0;
 	if (packetreceived)
@@ -795,7 +1072,7 @@ void checkrx(void)
 		    {		// rx startup , bind mode
 			    xn_readpayload(rxdata, 15);
 
-			    if (rxdata[0] == 164)
+			    if (rxdata[0] == 0xA4 && rx_bind_count >= 255)
 			      {	// bind packet
 				      rfchannel[0] = rxdata[6];
 				      rfchannel[1] = rxdata[7];
@@ -810,19 +1087,27 @@ void checkrx(void)
 				      rxaddress[4] = rxdata[5];
 				      
 				      xn_writerxaddress(rxaddress);
+				      xn_writetxaddress(rxaddress);
 				      xn_writereg(0x25, rfchannel[rf_chan]);	// Set channel frequency 
 							rxmode = RX_MODE_NORMAL;
 
 #ifdef SERIAL
 				      printf(" BIND \n");
 #endif
-			      }
+					}
+
+					rx_bind_count++;
+
+					xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
+					xn_command( FLUSH_RX);
 		    }
 		  else
-		    {		// normal mode  
+		    {		// normal mode
+					if (0 != lastrxtime)
+						packettime = gettime() - lastrxtime;
+
 #ifdef RXDEBUG
 			    channelcount[rf_chan]++;
-			    packettime = gettime() - lastrxtime;
 					
 					if ( skipchannel&& !timingfail ) afterskip[skipchannel]++;
 					if ( timingfail ) afterskip[0]++;
@@ -831,10 +1116,19 @@ void checkrx(void)
 
 unsigned long temptime = gettime();
 	
-			    nextchannel();
+					if (rx_packet_rate > temptime - rx_time_last)
+						rx_packet_rate = temptime - rx_time_last;
+					rx_time_last = temptime;
+
 
 			    xn_readpayload(rxdata, 15);
 			    pass = decodepacket();
+#ifdef TELEMETRY_ENABLE
+					if (!send_telemetry || packet_count < 100)
+						nextchannel();
+#else
+					nextchannel();
+#endif
 
 			    if (pass)
 			      {
@@ -855,6 +1149,29 @@ unsigned long temptime = gettime();
 #endif
 			      }
 
+						if (packet_count < 100)
+						{
+							if (packet_period == 0 || packet_period > packettime)
+								packet_period = packettime;
+
+							packet_count++;
+						}
+#ifdef TELEMETRY_ENABLE
+						else
+						{
+							if (send_telemetry)
+							{
+#ifdef BLUETOOTH_ENABLE
+								// allow bluetooth and telemetry to coexist
+								int sending_beacon = beacon_sequence();
+								if (!sending_beacon)
+									send_telemetry_packet();
+#else
+								send_telemetry_packet();
+#endif
+							}
+						}
+#endif
 		    }		// end normal rx mode
 
 	  }			// end packet received
@@ -863,38 +1180,40 @@ unsigned long temptime = gettime();
 #endif		
 	unsigned long time = gettime();
 
-		
+		if (0 == lastrxtime)
+			lastrxtime = time;
+
 
 	// sequence period 12000
-	if (time - lastrxtime > (HOPPING_NUMBER*PACKET_PERIOD + 1000) && rxmode != RX_MODE_BIND)
-	  {			
-			//  channel with no reception   
-		  lastrxtime = time;
-			// set channel to last with reception
-			if (!timingfail) rf_chan = lastrxchan;
-			// advance to next channel
-		  nextchannel();
-			// set flag to discard packet timing
-			timingfail = 1;
-	  }
-		
-#ifdef BLUETOOTH_ENABLE
-	if ( !timingfail && !ble_send && skipchannel < HOPPING_NUMBER+1 && rxmode != RX_MODE_BIND)
-#else
-	if ( !timingfail && skipchannel < HOPPING_NUMBER+1 && rxmode != RX_MODE_BIND)
-#endif
+	if (packet_count >= 100)
 	{
-			unsigned int temp = time - lastrxtime ;
-
-			if ( temp > 1000 && ( temp - (PACKET_OFFSET) )/((int) PACKET_PERIOD) >= (skipchannel + 1) ) 
-			{
+		if (time - lastrxtime > (HOPPING_NUMBER*packet_period + 1000) && rxmode != RX_MODE_BIND)
+			{			
+				//  channel with no reception   
+				lastrxtime = time;
+				// set channel to last with reception
+				if (!timingfail) rf_chan = lastrxchan;
+				// advance to next channel
 				nextchannel();
-#ifdef RXDEBUG				
-				skipstats[skipchannel]++;
-#endif				
-				skipchannel++;
+				// set flag to discard packet timing
+				timingfail = 1;
 			}
-		}	
+#ifdef BLUETOOTH_ENABLE
+		if ( !timingfail && !ble_send && skipchannel < HOPPING_NUMBER+1 && rxmode != RX_MODE_BIND)
+		{
+				unsigned int temp = time - lastrxtime ;
+
+				if ( temp > 1000 && ( temp - (PACKET_OFFSET) )/((int) packet_period) >= (skipchannel + 1) )
+				{
+					nextchannel();
+	#ifdef RXDEBUG				
+					skipstats[skipchannel]++;
+	#endif				
+					skipchannel++;
+				}
+			}
+#endif
+		}
 	
 	if (time - failsafetime > FAILSAFETIME)
 	  {	//  failsafe
