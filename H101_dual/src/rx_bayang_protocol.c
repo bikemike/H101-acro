@@ -49,7 +49,7 @@ THE SOFTWARE.
 
 
 // ble settings
-
+#ifdef BLUETOOTH_ENABLE
 // beacon interval
 #define BLE_INTERVAL 30000
 
@@ -62,7 +62,7 @@ THE SOFTWARE.
 // uses precalculated whitening data
 // possible values: 0 / 1
 #define ONE_CHANNEL 1
-
+#endif
 
 // radio settings
 
@@ -150,8 +150,9 @@ writeregs( demodcal , sizeof(demodcal) );
 #endif
 
 
-
+#ifdef BLUETOOTH_ENABLE
 bleinit();
+#endif
 
 delay(100);
 
@@ -201,7 +202,7 @@ int	rxcheck = xn_readreg( 0x0f); // rx address pipe 5
 	if ( rxcheck != 0xc6) failloop(3);
 }
 
-
+#ifdef BLUETOOTH_ENABLE
 void btLeCrc( uint8_t* buf ,uint8_t len, uint8_t* dst ) {
 
 union
@@ -349,6 +350,7 @@ for(i = 0; i < len; i++)
 else // lfsr based
 btLeWhiten(packet, len, whitenstart[chan]);	
 }
+#endif
 
 #define RXDEBUG
 
@@ -364,6 +366,8 @@ int skipstats[12];
 int afterskip[12];
 //#warning "RX debug enabled"
 #endif
+
+#ifdef BLUETOOTH_ENABLE
 
 // works with 4 and 5 addresses byte
 #define XN297_ADDRESS_SIZE_BLE 5
@@ -646,7 +650,7 @@ ble_txtime = gettime();
 return;	
 }
 
-
+#endif
 
 static char checkpacket()
 {
@@ -874,8 +878,12 @@ unsigned long temptime = gettime();
 			timingfail = 1;
 	  }
 		
+#ifdef BLUETOOTH_ENABLE
 	if ( !timingfail && !ble_send && skipchannel < HOPPING_NUMBER+1 && rxmode != RX_MODE_BIND)
-		{
+#else
+	if ( !timingfail && skipchannel < HOPPING_NUMBER+1 && rxmode != RX_MODE_BIND)
+#endif
+	{
 			unsigned int temp = time - lastrxtime ;
 
 			if ( temp > 1000 && ( temp - (PACKET_OFFSET) )/((int) PACKET_PERIOD) >= (skipchannel + 1) ) 
