@@ -242,7 +242,7 @@
 //#define BUZZER_PIN       GPIO_PIN_13 // SWDAT
 #define BUZZER_PIN       GPIO_PIN_14 // SWCLK
 #define BUZZER_PIN_PORT  GPIOA
-#define BUZZER_DELAY     5000000 // 5 seconds after loss of tx or low bat before buzzer starts
+#define BUZZER_DELAY     5e6 // 5 seconds after loss of tx or low bat before buzzer starts
 
 // enable "bluetooth low energy" beacon
 //#define BLUETOOTH_ENABLE
@@ -264,6 +264,11 @@
 // things that are experimental / old / etc
 // do not change things below
 
+// serial prints with info
+//#define SERIAL
+// serial driver on SWCLK - 57600 default
+//#define SERIAL_DRV
+
 // invert yaw pid
 //#define INVERT_YAW_PID
 
@@ -276,6 +281,15 @@
 // throttle direct to motors for thrust measure/ esc testing
 //#define MOTORS_TO_THROTTLE
 
+// time to change motor direction (uS)
+#ifdef THREE_D_THROTTLE
+// with 3d throttle a short timeout as it takes time to move the stick
+#define BRIDGE_TIMEOUT 10000
+#else
+//otherwise a 0.05s pause
+#define BRIDGE_TIMEOUT 50000
+#endif
+
 // level mode "manual" trims ( in degrees)
 // pitch positive forward trim
 // roll positive right trim
@@ -287,19 +301,11 @@
 #define TRIM_ROLL_INV 0.0
 
 
-// time to change motor direction (uS)
-#ifdef THREE_D_THROTTLE
-// with 3d throttle a short timeout as it takes time to move the stick
-#define BRIDGE_TIMEOUT 3000
-#else
-//otherwise a 0.05s pause
-#define BRIDGE_TIMEOUT 50000
-#endif
-
 // enable motors if pitch / roll controls off center (at zero throttle)
 // possible values: 0 / 1
 #define ENABLESTIX 0
 #define ENABLESTIX_TRESHOLD 0.3
+#define ENABLESTIX_TIMEOUT 1e6
 
 // old calibration flash
 //#define OLD_LED_FLASH

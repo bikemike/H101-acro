@@ -38,7 +38,6 @@ THE SOFTWARE.
 
 extern float throttlehpf(float in);
 
-
 extern int ledcommand;
 extern float rx[4];
 extern float gyro[3];
@@ -309,14 +308,14 @@ limitf(&throttle, 1.0);
 #endif	// end 3d throttle remap
 	
 // turn motors off if throttle is off and pitch / roll sticks are centered
-	if (failsafe || (throttle < 0.001f && ( !ENABLESTIX || !onground_long || aux[LEVELMODE] || (fabsf(rx[0]) < (float) ENABLESTIX_TRESHOLD && fabsf(rx[1]) < (float) ENABLESTIX_TRESHOLD))))
+	if (failsafe || (throttle < 0.001f && ( !ENABLESTIX || !onground_long || aux[LEVELMODE] || (fabsf(rx[0]) < (float) ENABLESTIX_TRESHOLD && fabsf(rx[1]) < (float) ENABLESTIX_TRESHOLD && fabsf(rx[2]) < (float) ENABLESTIX_TRESHOLD ))))
 	  {			// motors off
 		
 		onground = 1;
 			
 		if ( onground_long )
 		{
-			if ( gettime() - onground_long > 1000000)
+			if ( gettime() - onground_long > ENABLESTIX_TIMEOUT)
 			{
 				onground_long = 0;
 			}
@@ -372,7 +371,8 @@ limitf(&throttle, 1.0);
 							autocenter[i] = rx[i];
 						}
 				}
-#endif				
+#endif		
+			
 // end motors off / failsafe / onground
 	  }
 	else
@@ -677,7 +677,11 @@ if ( excess_ratio < 0.0f ) excess_ratio = 0.0;
 					
 					#ifndef NOMOTORS
 					//normal mode
-					pwm_set( i , test );				
+					if (bridge_stage == BRIDGE_WAIT) {
+						pwm_set( i , 0 );
+					} else {
+						pwm_set( i , test );
+					}
 					#else
 					#warning "NO MOTORS"
 					#endif
@@ -866,41 +870,15 @@ float clip_ff(float motorin, int number)
 }
 
 
-
-
-
 unsigned long bridgetime = 0;
 
 // the bridge sequencer creates a pause between motor direction changes
 // that way the motors do not try to instantly go in reverse and have time to slow down
 
-
 void bridge_sequencer(int dir)
 {
 
-	if (dir == DIR1 && bridge_stage != BRIDGE_FORWARD)
-	  {
-
-		  if (bridge_stage == BRIDGE_REVERSE)
-		    {
-			    bridge_stage = BRIDGE_WAIT;
-			    bridgetime = gettime();
-			    pwm_dir(FREE);
-		    }
-		  if (bridge_stage == BRIDGE_WAIT)
-		    {
-			    if (gettime() - bridgetime > BRIDGE_TIMEOUT)
-			      {
-				      // timeout has elapsed
-				      bridge_stage = BRIDGE_FORWARD;
-				      pwm_dir(DIR1);
-
-			      }
-
-		    }
-
-	  }
-	if (dir == DIR2 && bridge_stage != BRIDGE_REVERSE)
+	if (dir == REVERSE && bridge_stage != BRIDGE_REVERSE)
 	  {
 
 		  if (bridge_stage == BRIDGE_FORWARD)
@@ -915,7 +893,29 @@ void bridge_sequencer(int dir)
 			      {
 				      // timeout has elapsed
 				      bridge_stage = BRIDGE_REVERSE;
-				      pwm_dir(DIR2);
+				      pwm_dir(REVERSE);
+
+			      }
+
+		    }
+
+	  }
+	if (dir == FORWARD && bridge_stage != BRIDGE_FORWARD)
+	  {
+
+		  if (bridge_stage == BRIDGE_REVERSE)
+		    {
+			    bridge_stage = BRIDGE_WAIT;
+			    bridgetime = gettime();
+			    pwm_dir(FREE);
+		    }
+		  if (bridge_stage == BRIDGE_WAIT)
+		    {
+			    if (gettime() - bridgetime > BRIDGE_TIMEOUT)
+			      {
+				      // timeout has elapsed
+				      bridge_stage = BRIDGE_FORWARD;
+				      pwm_dir(FORWARD);
 
 			      }
 

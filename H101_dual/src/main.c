@@ -47,7 +47,7 @@ THE SOFTWARE.
 #include "control.h"
 #include "defines.h"
 #include "drv_i2c.h"
-
+#include "buzzer.h"
 #include "binary.h"
 
 #include <inttypes.h>
@@ -89,10 +89,6 @@ int main(void)
 	clk_init();
 
 	gpio_init();
-
-#ifdef SERIAL
-	serial_init();
-#endif
 
 	i2c_init();
 
@@ -181,6 +177,10 @@ int main(void)
 
 	gyro_cal();
 
+#ifdef SERIAL_DRV
+	serial_init();
+#endif
+	
 	imu_init();
 	
 	extern unsigned int liberror;
@@ -305,28 +305,7 @@ vbatt = battadc;
 		    }
 
 #ifdef BUZZER_ENABLE
-			static int buzzer_init = 0;
-			// wait 10 seconds (or 30 seconds if quad doesn't bind)
-			// before configuring the gpio buzzer pin to ensure
-			// there is time to program the chip (if using SWDAT or SWCLK)
-			uint32_t buzzer_delay = 10000000;
-			if (rxmode == RX_MODE_BIND)
-				buzzer_delay = 20000000;
-
-			if (maintime > buzzer_delay)
-			{
-				if (lowbatt || failsafe || buzzer_init)
-				{
-					if (!buzzer_init)
-					{
-						buzzer_init = gpio_init_buzzer();
-			}
-					else
-			{
 				buzzer();
-			}
-				}
-			}
 #endif
 
 #ifdef DEBUG
