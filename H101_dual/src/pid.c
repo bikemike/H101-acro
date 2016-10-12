@@ -53,10 +53,10 @@ float pidkd[PIDNUMBER] = { 6.05e-1, 6.05e-1, 4e-1 };
 
 
 // output limit                 
-const float outlimit[PIDNUMBER] = { 0.8, 0.8, 0.4 };
+float outlimit[PIDNUMBER] = { 0.8, 0.8, 0.4 };
 
 // limit of integral term (abs)
-const float integrallimit[PIDNUMBER] = { 0.8, 0.8, 0.4 };
+float integrallimit[PIDNUMBER] = { 0.8, 0.8, 0.4 };
 
 
 

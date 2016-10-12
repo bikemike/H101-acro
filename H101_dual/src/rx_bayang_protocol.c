@@ -100,7 +100,7 @@ char auxchange[AUXNUMBER];
 char lasttrim[4];
 
   char rfchannel[4];
-	int rxaddress[5];
+	int rxaddress[5] = {0};
 	int rxmode = 0;
 	int rf_chan = 0;
 
@@ -174,9 +174,10 @@ bleinit();
 delay(100);
 
 
-int rxaddress[5] = { 0 , 0 , 0 , 0 , 0  };
-xn_writerxaddress( rxaddress);
-xn_writetxaddress( rxaddress);
+	xn_writerxaddress( rxaddress);
+#ifdef TELEMETRY_ENABLE
+	xn_writetxaddress( rxaddress);
+#endif
 	xn_writereg( EN_AA , 0 );	// aa disabled
 	xn_writereg( EN_RXADDR , 1 ); // pipe 0 only
 	xn_writereg( RF_SETUP , XN_POWER);  // lna high current on ( better performance )
@@ -478,6 +479,9 @@ int beacon_sequence()
 		 {
 		 ble_send = 1;
 		 oldchan = rf_chan;
+#ifdef TELEMETRY_ENABLE
+     bleinit(); // only need to do this if telemetry is also enabled
+#endif
 		 send_beacon();
 	   beacon_seq_state++;
 		 }
@@ -515,6 +519,10 @@ int beacon_sequence()
 			xn_writereg(0x25, 0 ); // Set channel frequency	, bind
 		}
 		 beacon_seq_state++;
+
+#ifdef TELEMETRY_ENABLE
+		xn_writetxaddress( rxaddress); // only need to do this if telemetry is also enabled
+#endif
 	 break;
 	 
 	 default:
@@ -699,6 +707,8 @@ extern float pidki[PIDNUMBER];
 extern float pidkd[PIDNUMBER];
 extern float apidkp[3];
 extern float apidki[3];
+extern float outlimit[3];
+extern float integrallimit[3];
 #endif
 
 static int decodepacket( void)
@@ -773,8 +783,8 @@ char trims[4];
 					new_dataadjust =(rxdata[3]>>5) & 0x3;
 
 
-					// data mode  = 0, 1, 2
-					uint8_t num_data_modes = 3;
+					// data mode  = 0, 1, 2, 3 (pid roll/pitch, pid yaw, angle p&i, limits)
+					uint8_t num_data_modes = 4;
 					if (dataselect != new_dataselect)
 					{
 						dataselect = new_dataselect;
@@ -807,7 +817,7 @@ char trims[4];
 							}
 
 
-							// data mode (0=acro roll/acro pitch, 1=acro yaw, 2=level roll/pitch, )
+							// data mode (pid roll/pitch, pid yaw, angle p&i, limits)
 							if (0 == datamode)
 							{
 								if (1 == dataselect)
@@ -855,6 +865,24 @@ char trims[4];
 								}
 								else if (3 == dataselect)
 								{
+								}
+							}
+							else if (3 == datamode)
+							{
+								if (1 == dataselect)
+								{
+									outlimit[0] *= multiplier;
+									integrallimit[0] *= multiplier;
+								}
+								else if (2 == dataselect)
+								{
+									outlimit[1] *= multiplier;
+									integrallimit[1] *= multiplier;
+								}
+								else if (3 == dataselect)
+								{
+									outlimit[2] *= multiplier;
+									integrallimit[2] *= multiplier;
 								}
 							}
 						}
@@ -942,6 +970,20 @@ void send_telemetry_packet()
 	uint8_t throttle_on = 0;
 	static uint32_t flighttime = 0;
 	static uint32_t throttle_on_time = 0;
+	
+	static uint32_t rssi_time = 0;
+	static uint8_t rssi_next = 0;
+	static uint8_t rssi = 0;
+	
+	++rssi_next;
+	
+	if (rssi_time < uptime)
+	{
+		rssi = rssi_next;
+		rssi_time = uptime + packet_period*100;
+		rssi_next = 0;
+	}
+	
 
 	if (!throttle_on && rx[3] > 0.f)
 	{
@@ -963,12 +1005,13 @@ void send_telemetry_packet()
 	rxdata[0] = 0xa9;       // packet id
 	rxdata[1] = v.bytes[0]; // battery voltage
 	rxdata[2] = v.bytes[1]; // battery voltage
+	rxdata[3] = rssi;
 	v.v = (uint16_t)(uptime / 1000000);
-	rxdata[3] = v.bytes[0];
-	rxdata[4] = v.bytes[1];
+	rxdata[4] = v.bytes[0];
+	rxdata[6] = v.bytes[1] & 0x0F;
 	v.v = (uint16_t)(flighttime / 1000000);
 	rxdata[5] = v.bytes[0];
-	rxdata[6] = v.bytes[1];
+	rxdata[6] = v.bytes[1] >> 4;
 
 	// flight mode (bit 0-1),
 	// data mode   (bit 2-5)
@@ -999,6 +1042,12 @@ void send_telemetry_packet()
 		d[0] = &apidkp[0];
 		d[1] = &apidki[0];
 		d[2] = NULL;
+	}
+	else if (datamode == 3)
+	{
+		d[0] = &outlimit[0];
+		d[1] = &outlimit[1];
+		d[2] = &outlimit[2];
 	}
 
 
@@ -1078,8 +1127,7 @@ void checkrx(void)
 				      rfchannel[1] = rxdata[7];
 				      rfchannel[2] = rxdata[8];
 				      rfchannel[3] = rxdata[9];
-							
-							int rxaddress[5];
+
 				      rxaddress[0] = rxdata[1];
 				      rxaddress[1] = rxdata[2];
 				      rxaddress[2] = rxdata[3];
