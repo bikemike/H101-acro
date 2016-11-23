@@ -201,6 +201,7 @@
 //#define LVC_PREVENT_RESET
 #define LVC_PREVENT_RESET_VOLTAGE 2.85
 
+//#define PID_VOLTAGE_COMPENSATION
 
 // enable motor filter
 // hanning 3 sample fir filter
@@ -299,9 +300,9 @@
 #define TRIM_PITCH 0.0
 #define TRIM_ROLL 0.0
 
-// inverted trims
-#define TRIM_PITCH_INV 0.0
-#define TRIM_ROLL_INV 0.0
+// inverted trims ( disabled)
+//#define TRIM_PITCH_INV 0.0
+//#define TRIM_ROLL_INV 0.0
 
 
 // enable motors if pitch / roll controls off center (at zero throttle)

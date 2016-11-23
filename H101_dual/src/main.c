@@ -240,15 +240,15 @@ int main(void)
 			    // endless loop
 		    }
 
-		checkrx();
+		  checkrx();
 
-		sixaxis_read(checkrx);
+		  sixaxis_read(checkrx);
 
-		checkrx();
+		  checkrx();
 
-		control();
+		  control();
 
-		checkrx();
+		  checkrx();
 
 // battery low logic
 				
@@ -358,20 +358,27 @@ float min = score[0];
 			    ledflash(100000 + 500000 * (lowbatt), 12);
 		    }
 
+// rgb strip logic   
+#if (RGB_LED_NUMBER > 0)				
+	extern void rgb_led_lvc( void);
+	rgb_led_lvc( );
+#endif
+				
 #ifdef BUZZER_ENABLE
-				buzzer();
+	buzzer();
 #endif
 
 #ifdef DEBUG
 		  elapsedtime = gettime() - maintime;
 #endif
-// loop time 1ms                
-		  while ((gettime() - maintime) < (1000 - 22) )
+					
+	// loop time 1ms                
+	while ((gettime() - maintime) < (1000 - 22) )
 			  checkrx();
 
 
 
-	  }			// end loop
+	}			// end loop
 
 
 }
