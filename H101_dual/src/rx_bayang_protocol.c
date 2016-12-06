@@ -137,7 +137,7 @@ aux[CH_AUX1] = 1;
 	
 #define XN_TO_RX B10001111
 #define XN_TO_TX B10000010
-#define XN_POWER B00111111
+#define XN_POWER_RX B00111111
 	
 #endif
 
@@ -156,14 +156,8 @@ writeregs( demodcal , sizeof(demodcal) );
 
 #define XN_TO_RX B00001111
 #define XN_TO_TX B00000010
-#ifdef TELEMETRY_ENABLE
-// more telemetry packets seem to be received by the
-// transmitter when tx power is not set high (short range)
-// still need to test this on longer range
-#define XN_POWER B00000010
-#else
-#define XN_POWER B00000111
-#endif
+#define XN_POWER_RX B00000001
+#define XN_POWER_TX B00000110
 #endif
 
 
@@ -180,7 +174,7 @@ delay(100);
 #endif
 	xn_writereg( EN_AA , 0 );	// aa disabled
 	xn_writereg( EN_RXADDR , 1 ); // pipe 0 only
-	xn_writereg( RF_SETUP , XN_POWER);  // lna high current on ( better performance )
+	xn_writereg( RF_SETUP , XN_POWER_RX);
 	xn_writereg( RX_PW_P0 , 15 ); // payload size
 	xn_writereg( SETUP_RETR , 0 ); // no retransmissions ( redundant?)
 	xn_writereg( SETUP_AW , 3 ); // address size (5 bits)
@@ -203,6 +197,7 @@ spi_csoff();
 #endif
 
   xn_writereg( 0 , XN_TO_RX ); // power up, crc enabled, rx mode
+  xn_writereg( RF_SETUP , XN_POWER_RX);
 
 					xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
 					xn_command( FLUSH_RX);
@@ -492,6 +487,7 @@ int beacon_sequence()
 			if( (xn_readreg(0x17)&B00010000)  ) 
 			{
 				xn_writereg( 0 , XN_TO_RX ); 
+				xn_writereg( RF_SETUP , XN_POWER_RX);
 				xn_writereg(0x25, rfchannel[oldchan]);
 			 beacon_seq_state++;
 			 goto next;
@@ -501,7 +497,8 @@ int beacon_sequence()
 				if ( gettime() - ble_txtime > BLE_TX_TIMEOUT )
 				{
 				 xn_command( FLUSH_TX);
-					xn_writereg( 0 , XN_TO_RX ); 
+				 xn_writereg( 0 , XN_TO_RX ); 
+				 xn_writereg( RF_SETUP , XN_POWER_RX);
 				 beacon_seq_state++;
 				 ble_send = 0;
 				}
@@ -669,6 +666,7 @@ for( int i = 0 ; i < L ; i++) buffint[i] = buf[i];
 xn_command( FLUSH_TX);
 
 xn_writereg( 0 , XN_TO_TX );
+xn_writereg( RF_SETUP , XN_POWER_TX);
 
 payloadsize = L;
 xn_writepayload( buffint , L );
@@ -938,6 +936,7 @@ void radio_set_tx()
 {
 	xn_writereg(CONFIG, _BV(PWR_UP)|_BV(EN_CRC)|_BV(CRCO));
 	xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
+	xn_writereg( RF_SETUP , XN_POWER_TX);
 	xn_command(FLUSH_TX);
 	xn_command(FLUSH_RX);
 	radio_mode_tx = 1;
@@ -947,6 +946,7 @@ void radio_set_rx()
 {
 	xn_writereg(CONFIG, _BV(PWR_UP)|_BV(PRIM_RX)|_BV(EN_CRC)|_BV(CRCO));
 	xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
+	xn_writereg( RF_SETUP , XN_POWER_RX);
 	xn_command(FLUSH_RX);
 	xn_command(FLUSH_TX);
 	radio_mode_tx = 0;
@@ -971,17 +971,18 @@ void send_telemetry_packet()
 	static uint32_t flighttime = 0;
 	static uint32_t throttle_on_time = 0;
 	
-	static uint32_t rssi_time = 0;
-	static uint8_t rssi_next = 0;
-	static uint8_t rssi = 0;
+	static uint32_t packet_count_time = 0;
+	static uint16_t packet_count = 100;
+	static uint16_t packet_count_next = 10;
 	
-	++rssi_next;
+	++packet_count_next;
 	
-	if (rssi_time < uptime)
+	if (packet_count_time < uptime)
 	{
-		rssi = rssi_next;
-		rssi_time = uptime + packet_period*100;
-		rssi_next = 0;
+		// calculate moving average
+		packet_count = packet_count + packet_count_next - packet_count/10;
+		packet_count_time += 100000; // add 100ms
+		packet_count_next = 0;
 	}
 	
 
@@ -1005,7 +1006,7 @@ void send_telemetry_packet()
 	rxdata[0] = 0xa9;       // packet id
 	rxdata[1] = v.bytes[0]; // battery voltage
 	rxdata[2] = v.bytes[1]; // battery voltage
-	rxdata[3] = rssi;
+	rxdata[3] = (uint8_t)(packet_count>>1); // pps / 2 divide by 2
 	v.v = (uint16_t)(uptime / 1000000);
 	rxdata[4] = v.bytes[0];
 	rxdata[6] = v.bytes[1] & 0x0F;
