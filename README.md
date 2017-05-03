@@ -1,8 +1,11 @@
-# Floureon H101 acro firmware 
+[![Build Status](https://travis-ci.org/silver13/H101-acro.png)](https://travis-ci.org/silver13/H101-acro)
+
+# Floureon H101 and Eachine H8S acro firmware ( red board )
 
 *now with dual mode as well*
 
 __DO NOT ACCIDENTALLY FLASH THE H8MINI FIRMWARE TO THE H101__ (it may break it)
+
 
 Select folder for the correct firmware:
 * __H101_Acro__: Acro only, inverted flight possible (manual on a switch)
@@ -13,8 +16,9 @@ Note for H101_dual code: By default motor direction is automatically set at take
 
 For programming the ground pad is marked (B-) on the pcb(near the edge) .It is also close to some other components. Note there is also a (B+) pad,do not connect this. 
 
-It works with Devo , stock or H8 mini tx.You could also use the diy [nrf24_multipro](https://github.com/goebish/nrf24_multipro) module by Goebish.
+It works with Devo, stock or H8 mini tx.
 
+You could also use diy [nrf24_multipro](https://github.com/goebish/nrf24_multipro) module by Goebish or [DIY-Multiprotocol-TX-Module](https://github.com/pascallanger/DIY-Multiprotocol-TX-Module) which supports telemetry.
 
  * GigaDevice GD32F130G6 cortex-M3 32k
  * Invensense gyro + accelerometer
@@ -89,8 +93,10 @@ Read [INSTALL.md](INSTALL.md) for more information.
 ###Wiki
 http://sirdomsen.diskstation.me/dokuwiki/doku.php?id=start
 
+### 01.12.16
+* added telemetry for devo tx
 
-### 31.13.16
+### 31.10.16
 * gcc compilation fix for issue introduced by the high angle update
 * RGB strip driver added for ws2812 ws2813 leds (settings in hardware.h)
 * file hardware.h added for compatibility with other builds

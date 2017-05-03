@@ -1,8 +1,8 @@
 // CHANGING THE H-BRIDGE CODE CAN RESULT IN CONNECTING THE FETs ACROSS THE
-// BATTERY AND AS SUCH BRAKING THE BOARD.
+// BATTERY AND AS SUCH BREAKING THE BOARD.
 
 // Dshot driver for H101_dual firmware. Written by Markus Gritsch.
-// No throttle jitter, not min/max calibration, just pure digital goodness :)
+// No throttle jitter, no min/max calibration, just pure digital goodness :)
 
 // Dshot150 would be fast enough for up to 8 kHz main loop frequency. But
 // since this implementation does simple bit banging, Dshot150 takes a lot of
@@ -31,6 +31,10 @@
 #define DSHOT150
 //#define DSHOT300
 
+// IDLE_OFFSET is added to the throttle. Adjust its value so that the motors
+// still spin at minimum throttle.
+#define IDLE_OFFSET 40
+
 
 #include <gd32f1x0.h>
 
@@ -38,6 +42,9 @@
 #include "defines.h"
 #include "drv_pwm.h"
 #include "drv_time.h"
+#include "hardware.h"
+
+#ifdef USE_DSHOT_DRIVER
 
 #ifdef THREE_D_THROTTLE
 #error "Not tested with THREE_D_THROTTLE config option"
@@ -100,19 +107,22 @@ void pwm_set( uint8_t number, float pwm )
 #ifdef BIDIRECTIONAL
 
 	if ( pwmdir == FORWARD ) {
-		value = 48 + (uint16_t)( pwm * 1000 ); // maps 0.0 .. 0.999 to 48 .. 1047
+		// maps 0.0 .. 0.999 to 48 + IDLE_OFFSET .. 1047
+		value = 48 + IDLE_OFFSET + (uint16_t)( pwm * ( 1000 - IDLE_OFFSET ) );
 	} else if ( pwmdir == REVERSE ) {
-		value = 1048 + (uint16_t)( pwm * 1000 ); // maps 0.0 .. 0.999 to 1048 .. 2047
+		// maps 0.0 .. 0.999 to 1048 + IDLE_OFFSET .. 2047
+		value = 1048 + IDLE_OFFSET + (uint16_t)( pwm * ( 1000 - IDLE_OFFSET ) );
 	}
 
 #else
 
-	value = 48 + (uint16_t)( pwm * 2002 ); // maps 0.0 .. 0.999 to 48 .. 2047
+	// maps 0.0 .. 0.999 to 48 + IDLE_OFFSET * 2 .. 2047
+	value = 48 + IDLE_OFFSET * 2 + (uint16_t)( pwm * ( 2001 - IDLE_OFFSET * 2 ) );
 
 #endif
 
 	if ( onground ) {
-		value = 0;
+		value = 0; // stop the motors
 	}
 
 	if ( failsafe ) {
@@ -249,3 +259,5 @@ void pwm_dir( int dir )
 {
 	pwmdir = dir;
 }
+
+#endif
