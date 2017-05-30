@@ -77,6 +77,8 @@ void bridge_sequencer(int dir);
 int bridge_stage = BRIDGE_WAIT;
 
 int currentdir;
+extern int ledcommand;
+extern int ledblink;
 
 // for 3d throttle
 #ifdef THREE_D_THROTTLE
@@ -211,20 +213,50 @@ if (currentdir == REVERSE)
 		    }
 		  else
 		    {
-			    ledcommand = 1;
 			    if (command == 2)
 			      {
+							ledcommand = 1;
 				      aux[CH_AUX1] = 1;
 
 			      }
 			    if (command == 1)
 			      {
+							ledcommand = 1;
 				      aux[CH_AUX1] = 0;
 			      }
-					if (command == 4)
+			     if (command == 4)
 			      {
+							ledcommand = 1;
 				      aux[CH_AUX2] = !aux[CH_AUX2];
 			      }
+			#ifdef PID_GESTURE_TUNING
+			  int blink = 0;
+			    if (command == 5)
+			      {
+							// Cycle to next pid term (P I D)
+							blink = next_pid_term();
+			      }
+			    if (command == 6)
+			      {
+							// Cycle to next axis (Roll Pitch Yaw)
+							blink = next_pid_axis();
+			      }
+			    if (command == 7)
+			      {
+				      // Increase by 10%
+							blink = increase_pid();
+			      }
+			    if (command == 8)
+			      {
+					// Descrease by 10%
+				      			blink = decrease_pid();
+			      }
+					// U D U - Next PID term
+					// U D D - Next PID Axis
+					// U D R - Increase value
+					// U D L - Descrease value
+					ledblink = blink; //Will cause led logic to blink the number of times ledblink has stored in it.
+			  #endif
 		    }
 	  }
 
@@ -452,6 +484,43 @@ limitf(&throttle, 1.0);
 extern float vbatt;
 if (vbatt < (float) LVC_PREVENT_RESET_VOLTAGE) throttle = 0;
 #endif
+            
+
+#ifdef LVC_LOWER_THROTTLE
+extern float vbatt_comp;
+extern float vbattfilt;
+
+static float throttle_i = 0.0f;
+
+ float throttle_p = 0.0f;
+
+// can be made into a function
+if (vbattfilt < (float) LVC_LOWER_THROTTLE_VOLTAGE_RAW ) 
+   throttle_p = ((float) LVC_LOWER_THROTTLE_VOLTAGE_RAW - vbattfilt);
+// can be made into a function
+if (vbatt_comp < (float) LVC_LOWER_THROTTLE_VOLTAGE) 
+   throttle_p = ((float) LVC_LOWER_THROTTLE_VOLTAGE - vbatt_comp) ;	
+
+
+
+if ( throttle_p > 0 ) 
+{
+    throttle_i += throttle_p * 0.0001f; //ki
+}
+else throttle_i -= 0.001f;// ki on release
+
+if ( throttle_i > 0.5f) throttle_i = 0.5f;
+if ( throttle_i < 0.0f) throttle_i = 0.0f;
+
+throttle_p *= (float) LVC_LOWER_THROTTLE_KP;
+if ( throttle_p > 1.0f ) throttle_p = 1.0f;
+
+throttle -= throttle_p + throttle_i;
+
+if ( throttle < 0 ) throttle = 0;
+#endif
+            
+            
 		  onground = 0;
 		  float mix[4];
   if ( bridge_stage == BRIDGE_WAIT ) onground = 1;
