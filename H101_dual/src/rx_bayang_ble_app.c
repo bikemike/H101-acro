@@ -32,6 +32,10 @@ THE SOFTWARE.
 // https://github.com/lijunhw/nRF24_BLE/blob/master/Arduino/nRF24_BLE_advertizer_demo/nRF24_BLE_advertizer_demo.ino
 
 */
+#include "config.h"
+
+#ifdef RX_BAYANG_BLE_APP
+
 
 #include "binary.h"
 #include "drv_spi.h"
@@ -40,7 +44,6 @@ THE SOFTWARE.
 #include "xn297.h"
 #include "drv_time.h"
 #include <stdio.h>
-#include "config.h"
 #include "defines.h"
 
 #include "rx_bayang.h"
@@ -170,7 +173,6 @@ int PID_index_delay = 0;
 #define RADIO_XN297
 
 
-#ifdef RX_BAYANG_BLE_APP
 
 float rx[4];
 char aux[AUXNUMBER];

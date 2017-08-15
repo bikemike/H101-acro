@@ -91,7 +91,7 @@ extern void savecal(void);
 
 
 
-void control(void)
+void control(idle_callback idle_cb)
 {
 
 	// hi rates
@@ -260,11 +260,16 @@ if (currentdir == REVERSE)
 		    }
 	  }
 
+	idle_cb();
+
 	pid_precalc();
 
 
+	idle_cb();
+
 	if ( aux[LEVELMODE] )
 	  {// level mode
+	  // ~90 microseconds
 
 		extern void stick_vector( float , int);
 		extern float errorvect[];
@@ -312,6 +317,7 @@ if (currentdir == REVERSE)
 	  }
 
 
+	idle_cb();
 
 	pid(0);
 	pid(1);
@@ -455,6 +461,7 @@ limitf(&throttle, 1.0);
 #ifdef AUTO_THROTTLE
 		  if (aux[LEVELMODE])
 		    {
+				//~10 microseconds
 
 			   // float autothrottle = fastcos(attitude[0] * DEGTORAD) * fastcos(attitude[1] * DEGTORAD);
 				 extern float GEstG[];
@@ -816,8 +823,23 @@ if ( excess_ratio < 0.0f ) excess_ratio = 0.0;
 	  }			// end motors on
 
 
-	imu_calc();
-
+	idle_cb();
+		
+	if ( aux[LEVELMODE] )
+	{
+		extern uint32_t times_next[3];
+		uint32_t time_now = gettime();
+		// ~90 microseconds
+		// no throtle:
+		// 139 acro -> 319 level
+		// w/ throtle:
+		// 219 acro -> 419 level
+		imu_calc();
+		uint32_t time_tmp = gettime() - time_now;
+		if (times_next[2] < time_tmp)
+			times_next[2] = time_tmp;
+	}
+	idle_cb();
 }
 
 /////////////////////////////

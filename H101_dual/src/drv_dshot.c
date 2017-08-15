@@ -24,12 +24,12 @@
 
 // Enable this for 3D. The 'Motor Direction' setting in BLHeliSuite must
 // be set to 'Bidirectional' (or 'Bidirectional Rev.') accordingly:
-#define BIDIRECTIONAL
+//#define BIDIRECTIONAL
 
 // Select Dshot150 or Dshot300. Dshot150 consumes quite some main loop time.
 // DShot300 may require removing the input filter cap on the ESC:
-#define DSHOT150
-//#define DSHOT300
+//#define DSHOT150
+#define DSHOT300
 
 // IDLE_OFFSET is added to the throttle. Adjust its value so that the motors
 // still spin at minimum throttle.
@@ -51,7 +51,7 @@
 #endif
 
 #ifdef __GNUC__
-#error "Bit-bang timing not tested with GCC"
+//#error "Bit-bang timing not tested with GCC"
 #endif
 
 extern int failsafe;
@@ -191,56 +191,56 @@ static void bitbang_data()
 		motor_data[ i ] = 0;
 
 		if ( data & 0x01 ) {
-			__asm{NOP}
+			__NOP();
 			gpioset( GPIOA, GPIO_PIN_1 ); // FL
 		} else {
-			__asm{NOP} __asm{NOP}
+			__NOP(); __NOP();
 			gpioreset( GPIOA, GPIO_PIN_1 );
 		}
 
 		if ( data & 0x02 ) {
-			__asm{NOP}
+			__NOP();
 			gpioset( GPIOA, GPIO_PIN_3 ); // BL
 		} else {
-			__asm{NOP} __asm{NOP}
+			__NOP(); __NOP();
 			gpioreset( GPIOA, GPIO_PIN_3 );
 		}
 
 		if ( data & 0x04 ) {
-			__asm{NOP}
+			__NOP();
 			gpioset( GPIOA, GPIO_PIN_10 ); // FR
 		} else {
-			__asm{NOP} __asm{NOP}
+			__NOP(); __NOP();
 			gpioreset( GPIOA, GPIO_PIN_10 );
 		}
 
 		if ( data & 0x08 ) {
-			__asm{NOP}
+			__NOP();
 			gpioset( GPIOA, GPIO_PIN_8 ); // BR
 		} else {
-			__asm{NOP} __asm{NOP}
+			__NOP(); __NOP();
 			gpioreset( GPIOA, GPIO_PIN_8 );
 		}
 
 #if defined( DSHOT300 ) && ! defined( DSHOT150 )
 
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP}
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP();
 
 #elif defined( DSHOT150 ) && ! defined( DSHOT300 )
 
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP} __asm{NOP}
-		__asm{NOP} __asm{NOP} __asm{NOP}
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP();
 
 #else
 #error "Either define DSHOT150 or DSHOT300"

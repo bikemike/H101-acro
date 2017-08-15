@@ -56,6 +56,7 @@ uint8_t flightmode     = 0;
 uint8_t datamode       = 0;
 uint8_t dataselect     = 1;
 uint8_t dataadjust     = 1;
+extern int onground;
 #endif
 
 // ble settings
@@ -133,6 +134,10 @@ void rx_init()
 	aux[CH_AUX1] = 1;
 #endif
 
+#ifdef AUX4_START_ON
+	aux[CH_AUX4] = 1;
+#endif
+
 
 #ifdef RADIO_XN297L
 
@@ -151,8 +156,9 @@ void rx_init()
 	static uint8_t rfcal[8] = { 0x3e , 0xc9 , 0x9a , 0xA0 , 0x61 , 0xbb , 0xab , 0x9c  };
 	writeregs( rfcal , sizeof(rfcal) );
 
-	static uint8_t demodcal[6] = { 0x39 , 0x0b , 0xdf , 0xc4 , 0xa7 , 0x03};
-	writeregs( demodcal , sizeof(demodcal) );
+	// 0xa7 0x03
+	static uint8_t demodcal[6] = { 0x39, 0x0b, 0xdf, 0xc4, B00100111, B00000000 };
+	writeregs(demodcal, sizeof(demodcal));
 
 
 #define XN_TO_RX B00001111
@@ -933,7 +939,14 @@ int timingfail = 0;
 #ifdef RX_TELEMETRY_BIKEMIKE
 
 
-int radio_mode_tx = 0;
+enum {
+	RADIO_STATE_RECEIVE,
+	RADIO_STATE_TRANSMIT,
+	RADIO_STATE_TRANSMITTING,
+};
+
+uint8_t radio_state = RADIO_STATE_RECEIVE;
+
 uint32_t telemetry_packets_sent = 0;
 void radio_set_tx()
 {
@@ -941,8 +954,6 @@ void radio_set_tx()
 	xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
 	xn_writereg( RF_SETUP , XN_POWER_TX);
 	xn_command(FLUSH_TX);
-	xn_command(FLUSH_RX);
-	radio_mode_tx = 1;
 }
 
 void radio_set_rx()
@@ -950,10 +961,10 @@ void radio_set_rx()
 	xn_writereg(CONFIG, _BV(PWR_UP)|_BV(PRIM_RX)|_BV(EN_CRC)|_BV(CRCO));
 	xn_writereg(STATUS, 0x70); // clear rx_dr, tx_ds
 	xn_writereg( RF_SETUP , XN_POWER_RX);
-	xn_command(FLUSH_RX);
 	xn_command(FLUSH_TX);
-	radio_mode_tx = 0;
-}
+	xn_command(FLUSH_RX);
+} 
+
 
 extern float vbattfilt;
 
@@ -970,52 +981,49 @@ void send_telemetry_packet()
 {
 	val v;
 	uint32_t uptime = gettime();
-	uint8_t throttle_on = 0;
 	static uint32_t flighttime = 0;
 	static uint32_t throttle_on_time = 0;
 
-	static uint32_t packet_count_time = 0;
-	static uint16_t packet_count = 100;
-	static uint16_t packet_count_next = 10;
+	static uint32_t packet_count_time  = 0;
+	static uint16_t packets_per_second = 300;
+	static uint16_t packet_count_next  = 30;
 
 	++packet_count_next;
 
 	if (packet_count_time < uptime)
 	{
 		// calculate moving average
-		packet_count = packet_count + packet_count_next - packet_count/10;
+		packets_per_second = packets_per_second + packet_count_next - packets_per_second/10;
 		packet_count_time += 100000; // add 100ms
 		packet_count_next = 0;
 	}
 
 
-	if (!throttle_on && rx[3] > 0.f)
+	if (onground)
 	{
-		throttle_on = 1;
 		throttle_on_time = uptime;
 	}
-	else if (throttle_on)
+	else
 	{
-		if (rx[3] == 0.f)
-		{
-			throttle_on = 0;
-		}
 		flighttime += uptime - throttle_on_time;
 		throttle_on_time = uptime;
 	}
 
 	v.v = (uint16_t)(vbattfilt*100);
+	extern uint32_t loops_per_second;
+	extern unsigned long elapsedtime;
+	extern float times[3];
 
 	rxdata[0] = 0xa9;       // packet id
 	rxdata[1] = v.bytes[0]; // battery voltage
 	rxdata[2] = v.bytes[1]; // battery voltage
-	rxdata[3] = (uint8_t)(packet_count>>1); // pps / 2 divide by 2
+	rxdata[3] = (uint8_t)(packets_per_second>>1); // pps / 2 divide by 2
 	v.v = (uint16_t)(uptime / 1000000);
 	rxdata[4] = v.bytes[0];
 	rxdata[6] = v.bytes[1] & 0x0F;
 	v.v = (uint16_t)(flighttime / 1000000);
 	rxdata[5] = v.bytes[0];
-	rxdata[6] = v.bytes[1] >> 4;
+	rxdata[6] |= v.bytes[1] << 4;
 
 	// flight mode (bit 0-1),
 	// data mode   (bit 2-5)
@@ -1053,6 +1061,12 @@ void send_telemetry_packet()
 		d[1] = &outlimit[1];
 		d[2] = &outlimit[2];
 	}
+	else if (datamode == 4)
+	{
+		d[0] = &times[0];
+		d[1] = &times[1];
+		d[2] = &times[2];
+	}
 
 
 	for (uint8_t i = 0; i < 3; ++i)
@@ -1081,6 +1095,7 @@ void send_telemetry_packet()
 	radio_set_tx();
 	xn_writepayload(  rxdata , 15 );
 	txtime = gettime();
+	radio_state = RADIO_STATE_TRANSMITTING;
 }
 
 #endif
@@ -1097,10 +1112,9 @@ uint32_t skipped_chans = 0;
 void checkrx(void)
 {
 #ifdef RX_TELEMETRY_BIKEMIKE
-	if (radio_mode_tx)
+	if (RADIO_STATE_TRANSMITTING == radio_state)
 	{
-		int status;
-		status = xn_command(NOP);
+		int status = xn_command(NOP);
 
 		if (status & _BV(MASK_TX_DS))
 		{
@@ -1112,8 +1126,10 @@ void checkrx(void)
 			return;
 		}
 
+		radio_state = RADIO_STATE_RECEIVE;
 		radio_set_rx();
 		nextchannel();
+		return;
 	}
 #endif
 
@@ -1217,9 +1233,13 @@ void checkrx(void)
 					// allow bluetooth and telemetry to coexist
 					int sending_beacon = beacon_sequence();
 					if (!sending_beacon)
+					{
 						send_telemetry_packet();
+						radio_state = RADIO_STATE_TRANSMITTING;
+					}
 #else
 					send_telemetry_packet();
+					radio_state = RADIO_STATE_TRANSMITTING;
 #endif
 				}
 			}
@@ -1235,7 +1255,7 @@ void checkrx(void)
 	if (0 == lastrxtime)
 		lastrxtime = time;
 
-
+#if 0
 	// sequence period 12000
 	if (packet_count >= 100)
 	{
@@ -1250,7 +1270,7 @@ void checkrx(void)
 			// set flag to discard packet timing
 			timingfail = 1;
 		}
-#ifdef BLUETOOTH_ENABLE
+//#if 0 //defined BLUETOOTH_ENABLE
 		if ( !timingfail && !ble_send && skipchannel < HOPPING_NUMBER+1 && rxmode != RX_MODE_BIND)
 		{
 			unsigned int temp = time - lastrxtime ;
@@ -1264,8 +1284,9 @@ void checkrx(void)
 				skipchannel++;
 			}
 		}
-#endif
+//#endif
 	}
+#endif
 
 	if (time - failsafetime > FAILSAFETIME)
 	{	//  failsafe
