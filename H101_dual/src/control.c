@@ -52,6 +52,7 @@ extern float pidoutput[PIDNUMBER];
 
 int onground = 1;
 int onground_long = 1;
+int pid_gestures_used = 0;
 
 float thrsum;
 float rxcopy[4];
@@ -62,7 +63,6 @@ int lastchange;
 float yawangle;
 float overthrottlefilt;
 float underthrottlefilt;
-float feedback[3] = {1.0 , 1.0 , 1.0};
 
 #ifdef STOCK_TX_AUTOCENTER
 float autocenter[3];
@@ -101,13 +101,6 @@ void control(idle_callback idle_cb)
 	float anglerate;
 
 
-#ifdef TOGGLE_IN
-if ( auxchange[TOGGLE_IN] && !aux[TOGGLE_IN] )
-{
-   ledcommand = 1;
-aux[TOGGLE_OUT]=!aux[TOGGLE_OUT];
-}
-#endif
 
 #ifndef THREE_D_THROTTLE
 	if ( aux[INVERTEDMODE] )
@@ -200,12 +193,19 @@ if (currentdir == REVERSE)
 
 	int command = gestures2();
 
-	if (command)
+	if (command != GESTURE_NONE)
 	  {
-		  if (command == 3)
+		  if (command == GESTURE_DDD)
 		    {
 			    gyro_cal();	// for flashing lights
-			    acc_cal();
+
+			    //skip accel calibration if pid gestures used
+			    if ( !pid_gestures_used )
+			    {
+				    acc_cal();
+				    pid_gestures_used = 0;
+			    }
+
 			    savecal();
 			    // reset loop time
 			    extern unsigned lastlooptime;
@@ -213,40 +213,42 @@ if (currentdir == REVERSE)
 		    }
 		  else
 		    {
-			    if (command == 2)
+			    if (command == GESTURE_RRD)
 			      {
 							ledcommand = 1;
 				      aux[CH_AUX1] = 1;
 
 			      }
-			    if (command == 1)
+			    if (command == GESTURE_LLD)
 			      {
 							ledcommand = 1;
 				      aux[CH_AUX1] = 0;
 			      }
-			     if (command == 4)
+			     if (command == GESTURE_UUU)
 			      {
 							ledcommand = 1;
 				      aux[CH_AUX2] = !aux[CH_AUX2];
 			      }
 			#ifdef PID_GESTURE_TUNING
+			      if ( command == GESTURE_UDR || command == GESTURE_UDL ) pid_gestures_used = 1;
+
 			  int blink = 0;
-			    if (command == 5)
+			    if (command == GESTURE_UDU)
 			      {
 							// Cycle to next pid term (P I D)
 							blink = next_pid_term();
 			      }
-			    if (command == 6)
+			    if (command == GESTURE_UDD)
 			      {
 							// Cycle to next axis (Roll Pitch Yaw)
 							blink = next_pid_axis();
 			      }
-			    if (command == 7)
+			    if (command == GESTURE_UDR)
 			      {
 				      // Increase by 10%
 							blink = increase_pid();
 			      }
-			    if (command == 8)
+			    if (command == GESTURE_UDL)
 			      {
 					// Descrease by 10%
 				      			blink = decrease_pid();
@@ -304,8 +306,8 @@ if (currentdir == REVERSE)
 	else
 	  {			// rate mode
 
-		  error[0] = rxcopy[0] * MAX_RATE * DEGTORAD * ratemulti * feedback[0] - gyro[0];
-		  error[1] = rxcopy[1] * MAX_RATE * DEGTORAD * ratemulti * feedback[1] - gyro[1];
+		  error[0] = rxcopy[0] * MAX_RATE * DEGTORAD * ratemulti  - gyro[0];
+		  error[1] = rxcopy[1] * MAX_RATE * DEGTORAD * ratemulti  - gyro[1];
 
 		  // reduce angle Iterm towards zero
 		  extern float aierror[3];
@@ -313,7 +315,7 @@ if (currentdir == REVERSE)
 		  aierror[0] = 0.0f;
 			aierror[1] = 0.0f;
 
-		error[2] = rxcopy[2] * MAX_RATEYAW * DEGTORAD * ratemultiyaw * feedback[2] - gyro[2];
+		error[2] = rxcopy[2] * MAX_RATEYAW * DEGTORAD * ratemultiyaw  - gyro[2];
 	  }
 
 
@@ -323,9 +325,6 @@ if (currentdir == REVERSE)
 	pid(1);
 	pid(2);
 
-	feedback[0] = 1.0f;
-	feedback[1] = 1.0f;
-	feedback[2] = 1.0f;
 
 #ifndef THREE_D_THROTTLE
 // map throttle so under 10% it is zero
@@ -491,7 +490,7 @@ limitf(&throttle, 1.0);
 extern float vbatt;
 if (vbatt < (float) LVC_PREVENT_RESET_VOLTAGE) throttle = 0;
 #endif
-            
+
 
 #ifdef LVC_LOWER_THROTTLE
 extern float vbatt_comp;
@@ -502,15 +501,15 @@ static float throttle_i = 0.0f;
  float throttle_p = 0.0f;
 
 // can be made into a function
-if (vbattfilt < (float) LVC_LOWER_THROTTLE_VOLTAGE_RAW ) 
+if (vbattfilt < (float) LVC_LOWER_THROTTLE_VOLTAGE_RAW )
    throttle_p = ((float) LVC_LOWER_THROTTLE_VOLTAGE_RAW - vbattfilt);
 // can be made into a function
-if (vbatt_comp < (float) LVC_LOWER_THROTTLE_VOLTAGE) 
-   throttle_p = ((float) LVC_LOWER_THROTTLE_VOLTAGE - vbatt_comp) ;	
+if (vbatt_comp < (float) LVC_LOWER_THROTTLE_VOLTAGE)
+   throttle_p = ((float) LVC_LOWER_THROTTLE_VOLTAGE - vbatt_comp) ;
 
 
 
-if ( throttle_p > 0 ) 
+if ( throttle_p > 0 )
 {
     throttle_i += throttle_p * 0.0001f; //ki
 }
@@ -526,8 +525,8 @@ throttle -= throttle_p + throttle_i;
 
 if ( throttle < 0 ) throttle = 0;
 #endif
-            
-            
+
+
 		  onground = 0;
 		  float mix[4];
   if ( bridge_stage == BRIDGE_WAIT ) onground = 1;
@@ -566,6 +565,81 @@ if ( throttle < 0 ) throttle = 0;
 		}
 
 
+		for ( int i = 0 ; i <= 3 ; i++)
+		{			
+		#ifdef MOTOR_FILTER		
+		mix[i] = motorfilter(  mix[i] , i);
+		#endif	
+		
+        #ifdef MOTOR_FILTER2_ALPHA	
+        float motorlpf( float in , int x) ;           
+		mix[i] = motorlpf(  mix[i] , i);
+		#endif	
+        }
+
+
+#ifdef MIX_LOWER_THROTTLE_3
+{
+#ifndef MIX_THROTTLE_REDUCTION_MAX
+#define MIX_THROTTLE_REDUCTION_MAX 0.5f
+#endif
+
+float overthrottle = 0;
+
+for (int i = 0; i < 4; i++)
+		    {
+			    if (mix[i] > overthrottle)
+				    overthrottle = mix[i];
+            }
+
+
+overthrottle -=1.0f;
+// limit to half throttle max reduction
+if ( overthrottle > (float) MIX_THROTTLE_REDUCTION_MAX)  overthrottle = (float) MIX_THROTTLE_REDUCTION_MAX;
+
+if ( overthrottle > 0.0f)
+{
+    for ( int i = 0 ; i < 4 ; i++)
+        mix[i] -= overthrottle;
+}
+#ifdef MIX_THROTTLE_FLASHLED
+if ( overthrottle > 0.1f) ledcommand = 1;
+#endif
+}
+#endif
+
+
+#ifdef MIX_INCREASE_THROTTLE_3
+{
+#ifndef MIX_THROTTLE_INCREASE_MAX
+#define MIX_THROTTLE_INCREASE_MAX 0.2f
+#endif
+
+float underthrottle = 0;
+
+for (int i = 0; i < 4; i++)
+    {
+        if (mix[i] < underthrottle)
+            underthrottle = mix[i];
+    }
+
+
+// limit to half throttle max reduction
+if ( underthrottle < -(float) MIX_THROTTLE_INCREASE_MAX)  underthrottle = -(float) MIX_THROTTLE_INCREASE_MAX;
+
+if ( underthrottle < 0.0f)
+    {
+        for ( int i = 0 ; i < 4 ; i++)
+            mix[i] -= underthrottle;
+    }
+#ifdef MIX_THROTTLE_FLASHLED
+if ( underthrottle < -0.01f) ledcommand = 1;
+#endif
+}
+#endif
+
+
+
 #if ( defined MIX_LOWER_THROTTLE || defined MIX_INCREASE_THROTTLE)
 
 //#define MIX_INCREASE_THROTTLE
@@ -601,7 +675,7 @@ if ( throttle < 0 ) throttle = 0;
 		  for (int i = 0; i < 4; i++)
 		    {
 			    if (mix[i] > overthrottle)
-				    overthrottle = mix[i];               
+				    overthrottle = mix[i];
 					if (mix[i] < underthrottle)
 						underthrottle = mix[i];
 		    }
@@ -674,13 +748,17 @@ if ( throttle < 0 ) throttle = 0;
 			underthrottle *= ((float)MIX_THROTTLE_REDUCTION_PERCENT / 100.0f);
 
 #else
-    underthrottle = 0.001f;        
+    underthrottle = 0.001f;
 #endif
 
 
 		  if (overthrottle > 0 || underthrottle < 0 )
 		    {		// exceeding max motor thrust
-					float temp = overthrottle + underthrottle;
+				float temp = overthrottle + underthrottle;
+
+                #ifdef MIX_THROTTLE_FLASHLED
+                ledcommand = 1;
+                #endif
 			    for (int i = 0; i < 4; i++)
 			      {
 				      mix[i] -= temp;
@@ -688,70 +766,6 @@ if ( throttle < 0 ) throttle = 0;
 		    }
 // end MIX_LOWER_THROTTLE
 #endif
-
-
-
-#ifdef RATELIMITER_ENABLE
-// rate limiter if motors limit exceeded
-
-// 50mS lpf to remove vibrations
-#define RATELIMITER_FILT_TIME_US 50e3
-// reduce rates by half maximum 0.0 - 1.0 higher = more action
-#define RATELIMITER_MULTIPLIER_LIMIT 0.5f
-// at 1mS loop time 0.01 step takes 50mS to reach 0.5 reduction
-#define RATELIMITER_P_TERM 1.0f
-
-// variable for low pass filter
-static float feedbackfilt =  1.0f ;
-// limit exceeded by this amount
-float excess = 0;
-// motor thrust used by controls ( for one motor )
-float range = (fabsf(pidoutput[0]) + fabsf(pidoutput[1]) +fabsf(pidoutput[2]));
-{
-		float overthrottle =  0.0f;
-		float underthrottle = 0.01f;
-
-				for (int i = 0; i < 4; i++)
-					{
-						if (mix[i] > overthrottle)
-							overthrottle = mix[i];
-						if (mix[i] < underthrottle)
-							underthrottle = mix[i];
-					}
-
-				overthrottle -= 1.0f ;
-
-	if ( overthrottle > 0 )
-		excess = overthrottle;
-	if (underthrottle < 0)
-		excess += underthrottle;
-}
-
-
-float excess_ratio = RATELIMITER_P_TERM * (fabs(excess)) / range ;
-
-
-if ( excess_ratio > (float) RATELIMITER_MULTIPLIER_LIMIT ) excess_ratio = (float) RATELIMITER_MULTIPLIER_LIMIT;
-if ( excess_ratio < 0.0f ) excess_ratio = 0.0;
-
-	lpf( &feedbackfilt , excess_ratio , FILTERCALC( 1e3, RATELIMITER_FILT_TIME_US ) );
-
-	for ( int i = 0 ; i < 3 ; i++)
-		{
-			feedback[i] =  1.0f - feedbackfilt;
-		}
-// end RATELIMITER_ENABLE
-#endif
-
-
-#ifdef MOTOR_FILTER
-
-		  for (int i = 0; i < 4; i++)
-		    {
-			    mix[i] = motorfilter(mix[i], i);
-		    }
-#endif
-
 
 
 
@@ -962,22 +976,41 @@ float motormap(float input)
 
 float motormap(float in)
 {
-    
+
 float exp = CUSTOM_MOTOR_CURVE;
 	if ( exp > 1 ) exp = 1;
 	if ( exp < -1 ) exp = -1;
- 
+
 if (in > 1.0f) in = 1.0f;
 if (in < 0) in = 0;
-    
+
 	float ans = in * (in*in * exp +  ( 1 - exp ));
 
 if (ans > 1.0f) ans = 1.0f;
 if (ans < 0) ans = 0;
-    
+
 	return ans;
 }
 #endif
+
+
+
+#ifndef MOTOR_FILTER2_ALPHA
+#define MOTOR_FILTER2_ALPHA 0.3
+#endif
+
+
+float motor_filt[4];
+// this was supposed to be alpha-beta filter
+// but the beta parameter was always better off
+// hence it's an "alpha filter" aka 1st order lpf
+float motorlpf( float in , int x)
+{
+    
+    lpf(&motor_filt[x] , in , 1 - MOTOR_FILTER2_ALPHA);
+       
+    return motor_filt[x];
+}
 
 
 float hann_lastsample[4];
