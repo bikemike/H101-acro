@@ -1,8 +1,8 @@
 // CHANGING THE H-BRIDGE CODE CAN RESULT IN CONNECTING THE FETs ACROSS THE
-// BATTERY AND AS SUCH BREAKING THE BOARD.
+// BATTERY AND AS SUCH BRAKING THE BOARD.
 
 // Dshot driver for H101_dual firmware. Written by Markus Gritsch.
-// No throttle jitter, no min/max calibration, just pure digital goodness :)
+// No throttle jitter, not min/max calibration, just pure digital goodness :)
 
 // Dshot150 would be fast enough for up to 8 kHz main loop frequency. But
 // since this implementation does simple bit banging, Dshot150 takes a lot of
@@ -179,8 +179,13 @@ static void make_packet( uint8_t number, uint16_t value, bool telemetry )
 
 // Do not change anything between #pragma push and #pragma pop
 // without redoing thorough timing measurements.
+#ifndef __GNUC__
 #pragma push
 #pragma O2
+#else
+#pragma GCC push_options
+#pragma GCC optimize ("O2")
+#endif
 
 #define gpioset( port , pin) port->BOR = pin
 #define gpioreset( port , pin) port->BCR = pin
@@ -192,41 +197,38 @@ static void bitbang_data()
 		motor_data[ i ] = 0;
 
 		if ( data & 0x01 ) {
-			__NOP();
 			gpioset( GPIOA, GPIO_PIN_1 ); // FL
 		} else {
-			__NOP(); __NOP();
+			__NOP();
 			gpioreset( GPIOA, GPIO_PIN_1 );
 		}
 
 		if ( data & 0x02 ) {
-			__NOP();
 			gpioset( GPIOA, GPIO_PIN_3 ); // BL
 		} else {
-			__NOP(); __NOP();
+			__NOP();
 			gpioreset( GPIOA, GPIO_PIN_3 );
 		}
 
 		if ( data & 0x04 ) {
-			__NOP();
 			gpioset( GPIOA, GPIO_PIN_10 ); // FR
 		} else {
-			__NOP(); __NOP();
+			__NOP();
 			gpioreset( GPIOA, GPIO_PIN_10 );
 		}
 
 		if ( data & 0x08 ) {
-			__NOP();
 			gpioset( GPIOA, GPIO_PIN_8 ); // BR
 		} else {
-			__NOP(); __NOP();
+			__NOP();
 			gpioreset( GPIOA, GPIO_PIN_8 );
 		}
 
 #if defined( DSHOT300 ) && ! defined( DSHOT150 )
 
 		__NOP(); __NOP(); __NOP(); __NOP();
-		__NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
+		__NOP(); __NOP(); __NOP(); __NOP();
 
 #elif defined( DSHOT150 ) && ! defined( DSHOT300 )
 
@@ -250,7 +252,11 @@ static void bitbang_data()
 	}
 }
 
+#ifndef __GNUC__
 #pragma pop
+#else
+#pragma GCC pop_options
+#endif
 
 #define DSHOT_CMD_BEEP1 1
 #define DSHOT_CMD_BEEP2 2

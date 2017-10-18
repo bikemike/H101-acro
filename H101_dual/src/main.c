@@ -100,6 +100,10 @@ extern int failsafe;
 extern void loadcal(void);
 extern void imu_init(void);
 
+float times[3] = {0};
+uint32_t times_next[3] = {0};
+
+uint32_t loops_per_second = 0;
 
 int main(void)
 {
@@ -225,6 +229,17 @@ int main(void)
 	  {
 		  // gettime() needs to be called at least once per second 
 		  maintime = gettime();
+
+		  static uint32_t loop_count_time = 0;
+		  static uint32_t loop_count = 0;
+		  ++loop_count;
+		  if (maintime > loop_count_time)
+		  {
+			  loop_count_time = maintime + 1000000L;
+			  loops_per_second = loop_count;
+			  loop_count = 0;
+		  }
+
 		  looptime = ((uint32_t) (maintime - lastlooptime));
 		  if (looptime <= 0)
 			  looptime = 1;
@@ -242,13 +257,36 @@ int main(void)
 			    // endless loop
 		    }
 
+		  uint32_t time_tmp;
+		  uint32_t time_now = gettime();
+
+		  sixaxis_read(0 == aux[LEVELMODE], checkrx);
+
+		time_tmp = gettime() - time_now;
+                if (times_next[0] < time_tmp)
+			times_next[0] = time_tmp;
+		
+		  
+		  
+
 		  checkrx();
 
-		  sixaxis_read(checkrx);
+		  time_now = gettime();
+		  control(checkrx);
+		time_tmp = gettime() - time_now;
+		if (times_next[1] < time_tmp)
+			times_next[1] = time_tmp;
 
-		  checkrx();
-
-		  control();
+		static int copy_time = 0;
+		if (time_now - copy_time > 500000)
+		{
+			times[0] = times_next[0]/10000.f;
+			times[1] = times_next[1]/10000.f;
+			times[2] = times_next[2]/10000.f;
+			times_next[0] = 0;
+			times_next[1] = 0;
+			times_next[2] = 0;
+		}
 
 // battery low logic			
         // read battery voltage
@@ -271,7 +309,7 @@ int main(void)
 		// ( or they can use a single filter)		
 		lpf ( &thrfilt , thrsum , 0.9968f);	// 0.5 sec at 1.6ms loop time	
 
-        static float vbattfilt_corr = 4.2;
+        static float vbattfilt_corr = 8.4;
         // li-ion battery model compensation time decay ( 3 sec )
         lpf ( &vbattfilt_corr , vbattfilt , FILTERCALC( 1000 , 3000e3) );
 	

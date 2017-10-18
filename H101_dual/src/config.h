@@ -32,8 +32,8 @@
 
 // rate in deg/sec
 // for low rates ( acro mode)
-#define MAX_RATE 180.0f
-#define MAX_RATEYAW 180.0f
+#define MAX_RATE 360.0f
+#define MAX_RATEYAW 270.0f
 
 // multiplier for high rates
 // devo/module uses high rates only
@@ -63,13 +63,13 @@
 
 
 // disable inbuilt expo functions
-#define DISABLE_EXPO
+//#define DISABLE_EXPO
 
 // use if your tx has no expo function
 // also comment out DISABLE_EXPO to use
 // -1 to 1 , 0 = no exp
 // positive = less sensitive near center
-#define EXPO_XY 0.3f
+#define EXPO_XY 0.6f
 #define EXPO_YAW 0.0f
 
 
@@ -89,13 +89,13 @@
 //#define SOFT_LPF_1ST_043HZ
 //#define SOFT_LPF_1ST_100HZ
 //#define SOFT_LPF_2ND_043HZ
-#define SOFT_LPF_2ND_088HZ
+//#define SOFT_LPF_2ND_088HZ
 //#define SOFT_LPF_4TH_088HZ
 //#define SOFT_LPF_4TH_160HZ
 //#define SOFT_LPF_4TH_250HZ
 //#define SOFT_LPF_1ST_HZ 100
 //#define SOFT_LPF_2ST_HZ 100
-//#define SOFT_LPF_NONE
+#define SOFT_LPF_NONE
 
 
 // Channel assignments
@@ -129,10 +129,10 @@
 #define RATES CH_EXPERT
 
 // level / acro mode switch
-#define LEVELMODE CH_AUX1
+#define LEVELMODE DEVO_CHAN_7
 
 // channel for inverted mode ( default - CH_AUX3 - gravity based)
-#define INVERTEDMODE CH_AUX3
+#define INVERTEDMODE CH_OFF
 
 // leds on / off channel
 #define LEDS_ON CH_ON
@@ -194,7 +194,7 @@
 // battery saver ( only at powerup )
 // does not start software if battery is too low
 // flashes 2 times repeatedly at startup
-#define STOP_LOWBATTERY
+//#define STOP_LOWBATTERY
 
 // voltage too start warning
 // volts
@@ -277,8 +277,8 @@
 #define TX_POWER_TELEMETRY 1
 
 // rx protocol selection
-#define RX_BAYANG_TELEMETRY
-//#define RX_BAYANG_BIKEMIKE_TELEM
+//#define RX_BAYANG_TELEMETRY
+#define RX_BAYANG_BIKEMIKE_TELEM
 //#define RX_BAYANG_BLE
 //#define RX_BAYANG_BLE_APP
 

@@ -34,8 +34,8 @@
 #define ADC_ID_REF 6
 
 #define ADC_PA5 ADC_ID_VOLTAGE
-#define ADC_PA5_READOUT 2727
-#define ADC_PA5_VALUE   3.77f
+#define ADC_PA5_READOUT 3871
+#define ADC_PA5_VALUE   8.4f
 
 #define ADC_VREF ADC_ID_REF
 #define ADC_VREF_READOUT 1730
@@ -44,6 +44,6 @@
 //*** DO NOT ENABLE ESC DRIVER WITH BRUSHED MOTORS CONNECTED ***
 // output driver type , esc settings in drv_esc.c file
 
-#define USE_PWM_DRIVER
+//#define USE_PWM_DRIVER
 //#define USE_ESC_DRIVER
-//#define USE_DSHOT_DRIVER
+#define USE_DSHOT_DRIVER

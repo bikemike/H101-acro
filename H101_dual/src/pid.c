@@ -42,13 +42,13 @@ THE SOFTWARE.
 
 
 // Kp                            ROLL, PITCH, YAW
-float pidkp_flash[PIDNUMBER] = { 0.12, 0.12, 0.4 };
+float pidkp_flash[PIDNUMBER] = { 7.0e-2, 7.0e-2, 4e-1 };
 
 // Ki                            ROLL, PITCH, YAW
 float pidki_flash[PIDNUMBER] = { 0.65, 0.65, 5.0 };
 
 // Kd                            ROLL, PITCH, YAW
-float pidkd_flash[PIDNUMBER] = { 0.61, 0.61, 0.0 };
+float pidkd_flash[PIDNUMBER] = { 4.05e-1, 4.05e-1, 4e-1 };
 
 
 // output limit
